@@ -172,6 +172,8 @@ public:
          * Default is 3.
          */
         uint32_t timeBeforeEvictionFbo = 3;
+
+        bool vsync = true;
     };
 
     /**

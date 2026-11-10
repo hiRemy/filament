@@ -151,7 +151,8 @@ int VulkanPlatformSwapChainBase::setFrameRate(float,
 
 VulkanPlatformSurfaceSwapChain::VulkanPlatformSurfaceSwapChain(VulkanContext const& context,
         VkPhysicalDevice physicalDevice, VkDevice device, VkQueue queue, VkInstance instance,
-        VkSurfaceKHR surface, VkExtent2D fallbackExtent, void* nativeWindow, uint64_t flags)
+        VkSurfaceKHR surface, VkExtent2D fallbackExtent, void* nativeWindow, uint64_t flags,
+        bool vsync)
     : VulkanPlatformSwapChainBase(context, device, queue),
       mInstance(instance),
       mPhysicalDevice(physicalDevice),
@@ -160,6 +161,7 @@ VulkanPlatformSurfaceSwapChain::VulkanPlatformSurfaceSwapChain(VulkanContext con
       mUsesRGB((flags & backend::SWAP_CHAIN_CONFIG_SRGB_COLORSPACE) != 0),
       mHasStencil((flags & backend::SWAP_CHAIN_HAS_STENCIL_BUFFER) != 0),
       mIsProtected((flags & backend::SWAP_CHAIN_CONFIG_PROTECTED_CONTENT) != 0),
+      mVsync(vsync),
       mNativeWindow(nativeWindow) {
     assert_invariant(surface);
     create();
@@ -237,7 +239,6 @@ VkResult VulkanPlatformSurfaceSwapChain::create() {
 
     // Verify that our chosen present mode is supported. In practice all devices support the FIFO
     // mode, but we check for it anyway for completeness.  (and to avoid validation warnings)
-    VkPresentModeKHR const desiredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
     FixedCapacityVector<VkPresentModeKHR> presentModes = fvkutils::enumerate(
             vkGetPhysicalDeviceSurfacePresentModesKHR, mPhysicalDevice, mSurface);
 
@@ -247,8 +248,20 @@ VkResult VulkanPlatformSurfaceSwapChain::create() {
         return VK_ERROR_SURFACE_LOST_KHR;
     }
 
-    bool const foundSuitablePresentMode = std::find(presentModes.begin(), presentModes.end(),
-                                            desiredPresentMode) != presentModes.end();
+    auto const isPresentModeSupported = [&presentModes](VkPresentModeKHR mode) {
+        return std::find(presentModes.begin(), presentModes.end(), mode) != presentModes.end();
+    };
+    // Without vsync prefer IMMEDIATE (no wait at all), then MAILBOX (no wait, no tearing).
+    VkPresentModeKHR desiredPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    if (!mVsync) {
+        if (isPresentModeSupported(VK_PRESENT_MODE_IMMEDIATE_KHR)) {
+            desiredPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        } else if (isPresentModeSupported(VK_PRESENT_MODE_MAILBOX_KHR)) {
+            desiredPresentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        }
+    }
+
+    bool const foundSuitablePresentMode = isPresentModeSupported(desiredPresentMode);
     FILAMENT_CHECK_POSTCONDITION(foundSuitablePresentMode)
             << "Desired present mode is not supported by this device.";
 

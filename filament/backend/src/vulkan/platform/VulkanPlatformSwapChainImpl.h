@@ -86,7 +86,7 @@ protected:
 struct VulkanPlatformSurfaceSwapChain : public VulkanPlatformSwapChainBase {
     VulkanPlatformSurfaceSwapChain(VulkanContext const& context, VkPhysicalDevice physicalDevice,
             VkDevice device, VkQueue queue, VkInstance instance, VkSurfaceKHR surface,
-            VkExtent2D fallbackExtent, void* nativeWindow, uint64_t flags);
+            VkExtent2D fallbackExtent, void* nativeWindow, uint64_t flags, bool vsync = true);
 
     ~VulkanPlatformSurfaceSwapChain() override;
 
@@ -133,6 +133,7 @@ private:
     bool const mUsesRGB = false;
     bool const mHasStencil = false;
     bool const mIsProtected = false;
+    bool const mVsync = true;
     bool mSuboptimal;
     UTILS_UNUSED void* mNativeWindow = nullptr;
 
